@@ -1,0 +1,15 @@
+#spatial dimension
+dimension = 3
+
+#sideset IDs
+inside = 101
+
+#nodeset IDs
+top = 104
+bottom = 105
+
+#subdomain ID
+subdomain = 1
+
+#mesh filename
+mesh_name = cylinder.e 
