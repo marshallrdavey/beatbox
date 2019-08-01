@@ -37,7 +37,6 @@
 #include "libmesh/petsc_vector.h"
 #include "libmesh/mesh_function.h"
 #include "libmesh/exact_solution.h"
-//#define QORDER TWENTYSIXTH
 
 // Bring in everything from the libMesh namespace
 using namespace libMesh;
@@ -89,25 +88,25 @@ void populate_nodesets(std::vector<std::vector<Node*>>& node_vec, std::vector<st
 //compute the mean distance between two nodesets
 void nodeset_distance(double& dist, std::vector<std::vector<Node*>>& node_vec)
 {
-	double min = 100000.0;
+	//double min = 100000.0; //add in to see minimum distance
 	for(int i = 0; i < node_vec[0].size(); ++i)
 	{
 		for(int j = 0; j < node_vec[1].size(); ++j)
 		{
 			const double d = (*node_vec[0][i] - *node_vec[1][j]).norm();
 			dist += d;
-			if(d < min)
+			/*if(d < min)
 			{
 				min = d;
-			}
+			}*/
 		}
 	}
 	dist = dist/node_vec[0].size()/node_vec[1].size();
-	std::cout << "the minimum distance is " << min << "\n";
+	//std::cout << "the minimum distance is " << min << "\n";
 }
 
 //compute the approximate diameter of the nodesets
-void diameter(std::vector<std::vector<Node*>>& node_vec)
+/*void diameter(std::vector<std::vector<Node*>>& node_vec)
 {
 	double tmax = 0.0;
 	for(int i = 1; i < node_vec[0].size(); ++i)
@@ -129,7 +128,7 @@ void diameter(std::vector<std::vector<Node*>>& node_vec)
         }
 	std::cout << "the top diameter is " << tmax << "\n";
         std::cout << "the bottom diameter is " << bmax << "\n";
-}
+}*/
 
 //populate an element vecotr and face vector from a sideset ID
 void populate_sidesets(std::vector<Elem*>& elem_vec, std::vector<int>& side_vec, std::vector<int>& id_vec, Mesh& mesh)
@@ -171,7 +170,7 @@ double signed_volume(std::vector<Point>& p_vec, const Point center)
 	if(n_vec*com > 0)
 	{
 		vol = -1.0*vol;
-		//std::cout << "flipped\n";
+		//std::cout << "flipped\n"; //uncomment to see when the volume is subtracted
 	}
 	else if(n_vec*com == 0)
 	{
@@ -207,7 +206,7 @@ void nodeset_sort(std::vector<Node*>& out_vec, std::vector<Node*>& node_vec)
 	out_vec.clear();
 	out_vec.push_back(node_vec[0]);
 	std::vector<Node*> temp_vec;
-    temp_vec.assign(node_vec.begin()+1,node_vec.end());
+	temp_vec.assign(node_vec.begin()+1,node_vec.end());
 	std::vector<Node*> n_vec;
 	while(out_vec.size() < node_vec.size())
 	{
@@ -258,8 +257,8 @@ int main (int argc, char** argv)
 	GetPot input_file(argv[1]);
 
 	//read in parameters from the input file
-	const unsigned int dim              = input_file("dimension", 3);
-	const std::string mesh_name      	= input_file("mesh_name","");
+	const unsigned int dim              	    = input_file("dimension", 3);
+	const std::string mesh_name      	    = input_file("mesh_name","");
 	const std::string inside_ID		    = input_file("inside","");
 	const std::string top_ID		    = input_file("top","");
 	const std::string bottom_ID		    = input_file("bottom","");
@@ -270,7 +269,7 @@ int main (int argc, char** argv)
 	ExodusII_IO mesh_reader(mesh);
 	mesh_reader.read(mesh_name);
 	mesh.prepare_for_use();
-	//mesh.print_info();
+	//mesh.print_info();  //print out general information about the mesh
 
 	//load boundary
 	const BoundaryInfo& boundary_info = *mesh.boundary_info;
@@ -302,7 +301,7 @@ int main (int argc, char** argv)
 	double dist;
 	nodeset_distance(dist, nodeset_nodes);
 	std::cout << "the mean distance between nodesets is " << dist << "\n";
-	diameter(nodeset_nodes);
+	//diameter(nodeset_nodes);	//run the diameter function
 
 	//make element pointer vector and corresponding side vector
 	std::vector<Elem*> sideset_elems;
@@ -311,7 +310,7 @@ int main (int argc, char** argv)
 	parse_ID_string(sidesets, inside_ID);
 	populate_sidesets(sideset_elems, sideset_faces, sidesets, mesh);
 
-	//volume of tube without caps
+	//volume of solid without nodesets
 	double vol;
 	sideset_volume(vol, sideset_elems, sideset_faces, mesh);
 	
@@ -325,52 +324,10 @@ int main (int argc, char** argv)
 	double top_vol = meter_volume(sort_top);
 	double bottom_vol = meter_volume(sort_bottom);
 	std::cout << "top volume = " << top_vol << "\nbottom volume = " << bottom_vol << std::endl;
-	std::cout << "total volume = " << vol + top_vol - bottom_vol << "\n";
-	
-	/*
-	//barf out the normal vectors
-	//create an equation system object
-	EquationSystems equation_system(mesh);
+	/*the addition or subtraction of the nodeset volumes depends on the location of the origin
+	see paper: http://chenlab.ece.cornell.edu/Publication/Cha/icip01_Cha.pdf
+	for a better understanding of this method*/
+	std::cout << "total volume = " << vol + top_vol - bottom_vol << "\n"; 
 
-	//set parameters for the equation system and the solver
-	equation_system.parameters.set<Real>("linear solver tolerance") = TOLERANCE*TOLERANCE;
-	equation_system.parameters.set<unsigned int>("linear solver maximum iterations") = 2000;
-
-	// create fiber systems
-	LinearImplicitSystem& fiber_sys_x = equation_system.add_system<LinearImplicitSystem>("fiber_sys_x");
-	LinearImplicitSystem& fiber_sys_y = equation_system.add_system<LinearImplicitSystem>("fiber_sys_y");
-	LinearImplicitSystem& fiber_sys_z = equation_system.add_system<LinearImplicitSystem>("fiber_sys_z");
-
-	// adding variables for fibers and cross fibers
-	fiber_sys_x.add_variable("fibersx", CONSTANT, MONOMIAL);
-	fiber_sys_y.add_variable("fibersy", CONSTANT, MONOMIAL);
-	fiber_sys_z.add_variable("fibersz", CONSTANT, MONOMIAL);
-
-	// Initialize the equation system
-	equation_system.init();
-	equation_system.print_info();
-
-	// loop over elements
-	DofMap& fiber_dof_map = fiber_sys_x.get_dof_map();
-	DenseVector<Real> component;
-	std::vector<dof_id_type> fiber_dof_indices;
-	for (int i = 0 ; i < sideset_faces.size(); ++i)
-	{
-		component.resize(1);
-		const Elem* el = sideset_elems[i];
-		fiber_dof_map.dof_indices(el, fiber_dof_indices);
-		Point el_norm = elem_normals[i].unit()
-		component(0) = el_norm(0); fiber_sys_x.solution->add_vector(component, fiber_dof_indices);
-		component(0) = el_norm(1); fiber_sys_y.solution->add_vector(component, fiber_dof_indices);
-		component(0) = el_norm(2); fiber_sys_z.solution->add_vector(component, fiber_dof_indices);
-	}
-
-#ifdef LIBMESH_HAVE_EXODUS_API
-
-  ExodusII_IO (mesh).write_equation_systems("fibers_for_"+mesh_name, equation_system);
-  ExodusII_IO (mesh).write_timestep("results_for_"+mesh_name,equation_system,1,0);
-
-#endif
-*/
 	return 0;
 }
