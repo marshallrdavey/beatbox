@@ -105,8 +105,8 @@ void nodeset_distance(double& dist, std::vector<std::vector<Node*>>& node_vec)
 	//std::cout << "the minimum distance is " << min << "\n";
 }
 
-//compute the approximate diameter of the nodesets
-/*void diameter(std::vector<std::vector<Node*>>& node_vec)
+//compute the max distance between two nodes on a nodeset
+void diameter(std::vector<std::vector<Node*>>& node_vec)
 {
 	double tmax = 0.0;
 	for(int i = 1; i < node_vec[0].size(); ++i)
@@ -128,31 +128,9 @@ void nodeset_distance(double& dist, std::vector<std::vector<Node*>>& node_vec)
         }
 	std::cout << "the top diameter is " << tmax << "\n";
         std::cout << "the bottom diameter is " << bmax << "\n";
-}*/
+}
 
-/*//populate an element vecotr and face vector from a sideset ID, v1
-void populate_sidesets(std::vector<Elem*>& elem_vec, std::vector<int>& side_vec, std::vector<int>& id_vec, Mesh& mesh)
-{
-	const BoundaryInfo& boundary_info = *mesh.boundary_info;
-	MeshBase::const_element_iterator el = mesh.elements_begin();
-	const MeshBase::const_element_iterator el_end = mesh.elements_end();
-	for(; el != el_end; ++el)
-	{
-		for(int i = 0; i < (*el)->n_sides(); ++i)
-		{
-			std::vector<boundary_id_type> bdry_ids; 
-			boundary_info.boundary_ids(*el, i, bdry_ids);
-			if(find_first_of(bdry_ids.begin(), bdry_ids.end(), id_vec.begin(), id_vec.end()) != bdry_ids.end())
-			{
-				elem_vec.push_back(*el);
-				side_vec.push_back(i);
-			}
-		}
-	}
-	std::cout << "there are " << side_vec.size() << " sides in sideset " << id_vec[0] << "\n";
-}*/
-
-//populate an element vecotr and face vector from a sideset ID, v2
+//populate a vector of element pointers and vector of node pointers for the face on the subset
 void populate_sidesets(std::vector<Elem*>& elem_vec, std::vector<std::vector<Node*>>& side_vec, std::vector<int>& id_vec, Mesh& mesh)
 {
 	const BoundaryInfo& boundary_info = *mesh.boundary_info;
@@ -160,7 +138,7 @@ void populate_sidesets(std::vector<Elem*>& elem_vec, std::vector<std::vector<Nod
 	const MeshBase::const_element_iterator el_end = mesh.elements_end();
 	for(; el != el_end; ++el)
 	{
-		for(unsigned int side = 0; side < (*el)->n_sides(); ++i)
+		for(unsigned int side = 0; side < (*el)->n_sides(); ++side)
 		{
 			std::vector<boundary_id_type> bdry_ids; 
 			boundary_info.boundary_ids(*el, side, bdry_ids);
@@ -180,81 +158,6 @@ void populate_sidesets(std::vector<Elem*>& elem_vec, std::vector<std::vector<Nod
 	std::cout << "there are " << elem_vec.size() << " sides in sideset " << id_vec[0] << "\n";
 }
 
-/*//compute the signed volume of a sideset face, v1
-double signed_volume(std::vector<Point>& p_vec, const Point center)
-{
-	Point com;
-	const int size = p_vec.size();
-	for(int i=0; i<size; ++i)
-	{	
-		com += p_vec[i]/size;
-	}
-	Point n_vec = (p_vec[1] - p_vec[0]).cross(p_vec[2] - p_vec[0]).unit();
-	if(n_vec*(com - center) < 0)
-	{
-		n_vec = -1.0*n_vec;
-	}
-	double vol = fabs(p_vec[0].cross(p_vec[1])*p_vec[2])/6.0;
-	if(n_vec*com > 0)
-	{
-		vol = -1.0*vol;
-		//std::cout << "flipped\n"; //uncomment to see when the volume is subtracted
-	}
-	else if(n_vec*com == 0)
-	{
-		vol = 0.0;
-	}
-	return vol;
-}*/
-
-//compute the signed volume of a sideset face, v2
-double signed_volume(const std::vector<Node*> p_vec, const Point center)
-{
-	Point com;
-	const int size = p_vec.size();
-	for(int i=0; i<size; ++i)
-	{	
-		com += *p_vec[i]/size;
-	}
-	Point n_vec = (*p_vec[1] - *p_vec[0]).cross(*p_vec[2] - *p_vec[0]).unit();
-	if(n_vec*(com - center) < 0)
-	{
-		n_vec = -1.0*n_vec;
-	}
-	double vol = fabs(*p_vec[0].cross(*p_vec[1])*(*p_vec[2]))/6.0;
-	if(n_vec*com > 0)
-	{
-		vol = -1.0*vol;
-		//std::cout << "flipped\n"; //uncomment to see when the volume is subtracted
-	}
-	else if(n_vec*com == 0)
-	{
-		vol = 0.0;
-	}
-	return vol;
-}
-
-/*//main function compute sideset volume, v1
-void sideset_volume(double& vol, std::vector<Elem*>& elem_vec, std::vector<int>& side_vec, Mesh& mesh)
-{
-	for(int i = 0; i < elem_vec.size(); ++i)
-	{
-		const Elem* el = elem_vec[i];
-		const int side = side_vec[i];
-		std::vector<Point> nodes;
-		for(int j = 0; j < el->n_nodes(); ++j)
-		{
-			if(el->is_node_on_side(j, side))
-			{
-				nodes.push_back(el->point(j));
-			}
-		}
-		const Point centroid = el->centroid();
-		vol += signed_volume(nodes, centroid);
-	}
-	std::cout << "the side set volume is " << vol << "\n";
-}*/
-
 //main function compute sideset volume, v2
 void sideset_volume(double& vol, std::vector<Elem*>& elem_vec, std::vector<std::vector<Node*>>& side_vec, Mesh& mesh)
 {
@@ -262,8 +165,28 @@ void sideset_volume(double& vol, std::vector<Elem*>& elem_vec, std::vector<std::
 	{
 		const Elem* el = elem_vec[i];
 		const std::vector<Node*> side = side_vec[i];
-		const Point centroid = el->centroid();
-		vol += signed_volume(side, centroid);
+		const Point center = el->centroid();
+		Point com;
+        	for(int j=0; j<3; ++j)
+        	{
+                	com += *side[j]/3.0;
+        	}
+        	Point n_vec = (*side[1] - *side[0]).cross(*side[2] - *side[0]).unit();
+        	if(n_vec*(com - center) < 0)
+        	{
+                	n_vec = -1.0*n_vec;
+        	}
+        	double signed_volume = fabs(side[0]->cross(*side[1])*(*side[2]))/6.0;
+       		if(n_vec*com > 0)
+        	{
+                	signed_volume = -1.0*signed_volume;
+                	//std::cout << "flipped\n"; //uncomment to see when the volume is subtracted
+        	}
+		else if(n_vec*com == 0)
+	        {
+                	signed_volume = 0.0;
+        	}
+		vol += signed_volume;
 	}
 	std::cout << "the side set volume is " << vol << "\n";
 }
@@ -369,7 +292,7 @@ int main (int argc, char** argv)
 	double dist;
 	nodeset_distance(dist, nodeset_nodes);
 	std::cout << "the mean distance between nodesets is " << dist << "\n";
-	//diameter(nodeset_nodes);	//run the diameter function
+	diameter(nodeset_nodes);	//run the diameter function
 
 	//make element pointer vector and corresponding side vector
 	std::vector<Elem*> sideset_elems;
@@ -379,9 +302,9 @@ int main (int argc, char** argv)
 	populate_sidesets(sideset_elems, sideset_faces, sidesets, mesh);
 
 	//volume of solid without nodesets
-	/*double vol;
+	double vol;
 	sideset_volume(vol, sideset_elems, sideset_faces, mesh);
-	
+
 	//sorted node pointer list
 	std::vector<Node*> sort_top;
 	nodeset_sort(sort_top, nodeset_nodes[0]);
@@ -395,7 +318,7 @@ int main (int argc, char** argv)
 	/*the addition or subtraction of the nodeset volumes depends on the location of the origin
 	see paper: http://chenlab.ece.cornell.edu/Publication/Cha/icip01_Cha.pdf
 	for a better understanding of this method*/
-	//std::cout << "total volume = " << vol + top_vol - bottom_vol << "\n";
+	std::cout << "total volume = " << vol + top_vol - bottom_vol << "\n";
 
 	return 0;
 }
