@@ -1,0 +1,6 @@
+#spatial dimension
+dimension = 3
+
+#mesh filename
+ref_mesh_name = ref_mitral_valve.e 
+new_mesh_name = new_mitral_valve.e 

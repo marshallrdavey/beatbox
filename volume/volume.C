@@ -22,6 +22,7 @@
 #include "libmesh/numeric_vector.h"
 #include "libmesh/linear_implicit_system.h"
 #include "libmesh/exodusII_io.h"
+#include "libmesh/exodusII_io_helper.h"
 #include "libmesh/fe_interface.h"
 #include "libmesh/getpot.h"
 #include "libmesh/mesh_refinement.h"
@@ -37,6 +38,8 @@
 #include "libmesh/petsc_vector.h"
 #include "libmesh/mesh_function.h"
 #include "libmesh/exact_solution.h"
+#include "libmesh/system.h"
+#include "libmesh/mesh_refinement.h"
 
 // Bring in everything from the libMesh namespace
 using namespace libMesh;
@@ -81,8 +84,8 @@ void populate_nodesets(std::vector<std::vector<Node*>>& node_vec, std::vector<st
 			node_vec[1].push_back(*no);
 		}
 	}
-	std::cout << "\nnodeset " << id_vec[0][0] << " contains " << node_vec[0].size() << " nodes\n";
-	std::cout << "nodeset " << id_vec[1][0] << " contains " << node_vec[1].size() << " nodes\n";
+	//std::cout << "\nnodeset " << id_vec[0][0] << " contains " << node_vec[0].size() << " nodes\n";
+	//std::cout << "nodeset " << id_vec[1][0] << " contains " << node_vec[1].size() << " nodes\n";
 }
 
 //compute the mean distance between two nodesets
@@ -127,11 +130,11 @@ void diameter(std::vector<std::vector<Node*>>& node_vec)
                 }
         }
 	std::cout << "the top diameter is " << tmax << "\n";
-        std::cout << "the bottom diameter is " << bmax << "\n";
+    std::cout << "the bottom diameter is " << bmax << "\n";
 }
 
 //populate a vector of element pointers and vector of node pointers for the face on the subset
-void populate_sidesets(std::vector<Elem*>& elem_vec, std::vector<std::vector<Node*>>& side_vec, std::vector<int>& id_vec, Mesh& mesh)
+void populate_sidesets(std::vector<Elem*>& elem_vec, std::vector<int>& face_vec, std::vector<std::vector<Node*>>& side_vec, std::vector<int>& id_vec, Mesh& mesh)
 {
 	const BoundaryInfo& boundary_info = *mesh.boundary_info;
 	MeshBase::const_element_iterator el = mesh.elements_begin();
@@ -145,6 +148,7 @@ void populate_sidesets(std::vector<Elem*>& elem_vec, std::vector<std::vector<Nod
 			if(find_first_of(bdry_ids.begin(), bdry_ids.end(), id_vec.begin(), id_vec.end()) != bdry_ids.end())
 			{
 				elem_vec.push_back(*el);
+				face_vec.push_back(side);
 				const std::vector<unsigned int> points = (*el)->nodes_on_side(side);
 				std::vector<Node*> node_vec;
 				for(unsigned node = 0; node < points.size(); ++node)
@@ -155,7 +159,7 @@ void populate_sidesets(std::vector<Elem*>& elem_vec, std::vector<std::vector<Nod
 			}
 		}
 	}
-	std::cout << "there are " << elem_vec.size() << " sides in sideset " << id_vec[0] << "\n";
+	//std::cout << "there are " << elem_vec.size() << " sides in sideset " << id_vec[0] << "\n";
 }
 
 //main function compute sideset volume, v2
@@ -248,8 +252,9 @@ int main (int argc, char** argv)
 	GetPot input_file(argv[1]);
 
 	//read in parameters from the input file
-	const unsigned int dim              	    = input_file("dimension", 3);
+	const unsigned int dim              	    = input_file("dimension",3);
 	const std::string mesh_name      	    = input_file("mesh_name","");
+	const unsigned int mesh_order		    = input_file("mesh_order",1);
 	const std::string inside_ID		    = input_file("inside","");
 	const std::string top_ID		    = input_file("top","");
 	const std::string bottom_ID		    = input_file("bottom","");
@@ -265,7 +270,7 @@ int main (int argc, char** argv)
 	//load boundary
 	const BoundaryInfo& boundary_info = *mesh.boundary_info;
 
-	//print out sideset IDs
+	/*//print out sideset IDs
 	std::cout << "\n" << "sideset IDs and names are... \n";
 	std::set<short int>::iterator ii;
 	for(ii = boundary_info.get_side_boundary_ids().begin();  ii != boundary_info.get_side_boundary_ids().end(); ++ii)
@@ -280,6 +285,7 @@ int main (int argc, char** argv)
 	{
 		std::cout << *ii <<" " << boundary_info.get_nodeset_name(*ii) << std::endl;
 	}
+	*/
 
 	//make node pointer vector
 	std::vector<std::vector<Node*>> nodeset_nodes(2);
@@ -288,22 +294,27 @@ int main (int argc, char** argv)
 	parse_ID_string(nodesets[1], bottom_ID);
 	populate_nodesets(nodeset_nodes, nodesets, mesh);
 
+	/*
 	//mean distance between nodesets
 	double dist;
 	nodeset_distance(dist, nodeset_nodes);
 	std::cout << "the mean distance between nodesets is " << dist << "\n";
 	diameter(nodeset_nodes);	//run the diameter function
+	*/
 
 	//make element pointer vector and corresponding side vector
 	std::vector<Elem*> sideset_elems;
-	std::vector<std::vector<Node*>> sideset_faces;
+	std::vector<int> sideset_faces;    
+	std::vector<std::vector<Node*>> sideset_nodes;
 	std::vector<int> sidesets;
 	parse_ID_string(sidesets, inside_ID);
-	populate_sidesets(sideset_elems, sideset_faces, sidesets, mesh);
+	populate_sidesets(sideset_elems, sideset_faces, sideset_nodes, sidesets, mesh);
 
+	/*
 	//volume of solid without nodesets
 	double vol;
-	sideset_volume(vol, sideset_elems, sideset_faces, mesh);
+	sideset_volume(vol, sideset_elems, sideset_nodes, mesh);
+	*/
 
 	//sorted node pointer list
 	std::vector<Node*> sort_top;
@@ -311,14 +322,70 @@ int main (int argc, char** argv)
 	std::vector<Node*> sort_bottom;
 	nodeset_sort(sort_bottom, nodeset_nodes[1]);
 
-	//nodeset volume
-	double top_vol = meter_volume(sort_top);
-	double bottom_vol = meter_volume(sort_bottom);
-	std::cout << "top volume = " << top_vol << "\nbottom volume = " << bottom_vol << std::endl;
+	//build stuff for integration
+	//equation system objest
+	EquationSystems equation_system(mesh);
+	
+	//specicfy volume system
+	LinearImplicitSystem& volume_system = equation_system.add_system<LinearImplicitSystem>("ComputeVolume");
+	
+	//specifiy nodal change systems
+	System& sol_x0 = equation_system.add_system<System>("x0");
+	System& sol_x1 = equation_system.add_system<System>("x1");
+	System& sol_x2 = equation_system.add_system<System>("x2");
+	sol_x0.add_variable("X_0", static_cast<Order>(mesh_order/*2*/));
+	sol_x1.add_variable("X_1", static_cast<Order>(mesh_order/*2*/));
+	sol_x2.add_variable("X_2", static_cast<Order>(mesh_order/*2*/));
+	
+	// add variables to system, attach assemble function, and initialize system
+	volume_system.add_variable ("nerd", static_cast<Order>(mesh_order), LAGRANGE);
+	equation_system.init();
+	
+	//create an fe type
+	FEType fe_type = volume_system.variable_type(0);
+	UniquePtr<FEBase> fe_elem_face(FEBase::build(dim, fe_type));
+	QGauss qface(dim-1, fe_type.default_quadrature_order());
+	fe_elem_face->attach_quadrature_rule(&qface);
+	
+	//integral stuff
+	const std::vector<Real>& JxW_face = fe_elem_face->get_JxW();
+	const std::vector<libMesh::Point>& qface_normals = fe_elem_face->get_normals();
+	const std::vector<Point>& qface_points = fe_elem_face->get_xyz();
+
+	//loop to alter mesh at each time step
+	for(unsigned int t = 1; t <= 1 /*mesh_reader.get_num_time_steps()*/; ++t)
+	{
+	
+		/*MeshBase::const_node_iterator no = mesh.nodes_begin();
+		const MeshBase::const_node_iterator no_end = mesh.nodes_end();
+		mesh_reader.copy_nodal_solution(sol_x0, "X_0", "X_0", t);
+		mesh_reader.copy_nodal_solution(sol_x1, "X_1", "X_1", t);
+		mesh_reader.copy_nodal_solution(sol_x2, "X_2", "X_2", t);
+
+		for(; no != no_end; ++no)
+		{
+			const dof_id_type no_id = (*no)->id();
+			(*(*no)) = Point(sol_x0.current_solution(no_id),sol_x1.current_solution(no_id),sol_x2.current_solution(no_id));
+		}*/		
+
+		//loop over elements in sideset vectors
+		double integral = 0.0;
+		for(unsigned int i = 0; i < sideset_faces.size(); ++i)
+		{
+			fe_elem_face->reinit(sideset_elems[i],sideset_faces[i]);
+			for(int qp = 0; qp < qface_points.size(); ++qp)
+			{
+				integral += -(1.0/3.0) * qface_points[qp] * qface_normals[qp] * JxW_face[qp];
+			}
+		}
+		double top_vol = meter_volume(sort_top);
+		double bottom_vol = meter_volume(sort_bottom);
+		std::cout << integral + top_vol + bottom_vol << "\n";
+	}
+
 	/*the addition or subtraction of the nodeset volumes depends on the location of the origin
 	see paper: http://chenlab.ece.cornell.edu/Publication/Cha/icip01_Cha.pdf
 	for a better understanding of this method*/
-	std::cout << "total volume = " << vol + top_vol - bottom_vol << "\n";
 
-	return 0;
+	return 0;	
 }

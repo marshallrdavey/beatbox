@@ -2,7 +2,7 @@
 ######################################################################
 #
 # Template libMesh application Makefile
-LIBMESH_DIR ?= /not_backed_up/shared/libMesh/1.0.0/linux-dbg
+LIBMESH_DIR ?= /path/to/libmesh/dir
 
 
 # include the library options determined by configure
