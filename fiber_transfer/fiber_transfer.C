@@ -33,7 +33,7 @@
 #include "libmesh/mesh_function.h"
 #include "libmesh/exact_solution.h"
 #include "libmesh/system.h"
-
+#include "libmesh/explicit_system.h"
 
 // Bring in everything from the libMesh namespace
 using namespace libMesh;
@@ -59,7 +59,7 @@ int main (int argc, char** argv)
 	//ref_mesh.allow_renumbering(false);
 	ref_mesh.prepare_for_use();
 	//ref_mesh.print_info();
-
+/*
 	//read in mesh to add fibers to 
 	Mesh new_mesh(init.comm(), dim);
 	ExodusII_IO new_mesh_reader(new_mesh);
@@ -67,15 +67,75 @@ int main (int argc, char** argv)
 	//new_mesh.allow_renumbering(false);
 	new_mesh.prepare_for_use();
 	//new_mesh.print_info();
-
+*/	
+	std::cout << "elemental data\n";
 	//get element variable names from reference mesh 
 	const std::vector<std::string> ref_elem_vars = ref_mesh_reader.get_elem_var_names();
-/*
+
 	for(unsigned int i = 0; i < ref_elem_vars.size(); ++i)
 	{
 		std::cout << ref_elem_vars[i] << "\n";
 	}
+/*	
+	std::cout << "nodal data\n";
+	//get node variable names from reference mesh 
+	const std::vector<std::string> ref_node_vars = ref_mesh_reader.get_nodal_var_names();
+
+	for(unsigned int i = 0; i < ref_node_vars.size(); ++i)
+	{
+		std::cout << ref_node_vars[i] << "\n";
+	}
 */
+    EquationSystems system(ref_mesh);
+    EquationSystems ref_system(ref_mesh);
+
+    System& fibers = system.add_system<System>("fiber");
+    //System& ref_fibers = ref_system.add_system<System>("fiber_info");
+    System& gogo = ref_system.add_system<System>("gogo");
+    System& ref_fibers = ref_system.add_system<System>("fiber_info");
+
+    gogo.add_variable(ref_elem_vars[3], FEType(CONSTANT, MONOMIAL));
+    for(unsigned int i = 0; i < 3 /*ref_elem_vars.size()*/; ++i)
+    {
+        ref_fibers.add_variable(ref_elem_vars[i], FEType(CONSTANT, MONOMIAL));  
+        fibers.add_variable(ref_elem_vars[i], FEType(CONSTANT, MONOMIAL));
+    }
+    //gogo.add_variable(ref_elem_vars[3], FEType(CONSTANT, MONOMIAL));
+    
+    ref_system.init();
+//    system.init();
+    
+//    std::cout << system.get_info() << "\n"; 
+    std::cout << ref_system.get_info() << "\n";
+
+    //copy fiber solutions to ref_system
+    for(unsigned int i = 0; i < 3; ++i)
+    {
+        ref_mesh_reader.copy_elemental_solution(ref_fibers,ref_elem_vars[i],ref_elem_vars[i],1);
+    }
+/*
+    //initiate element iterator to transfer system data from ref_fibers to new_fibers
+    MeshBase::const_element_iterator el = ref_mesh.active_local_elements_begin();
+    const MeshBase::const_element_iterator el_end = ref_mesh.active_local_elements_end();
+    DofMap& dof_map = ref_fibers.get_dof_map();
+    std::vector<dof_id_type> dof_indices;
+
+    for(;el != el_end; ++el)
+    {
+        const Elem* elem = *el;
+        dof_map.dof_indices(elem, dof_indices);
+
+        for(unsigned int i = 0; i < 3; ++i)
+        {
+            const dof_id_type id = dof_indices[i];
+            ref_fibers.solution->set(id,5.0);
+            std::cout << (*ref_fibers.solution)(id) << "\n";
+        }
+
+    }
+*/
+
+/*
 	//equation system objects
 	EquationSystems ref_system(ref_mesh);
 	EquationSystems new_system(new_mesh);
@@ -121,6 +181,6 @@ int main (int argc, char** argv)
   	file_writer.write("fibers_for_"+new_mesh_name);
   	file_writer.write_element_data(new_system);
 	//ExodusII_IO (new_mesh).write_timestep("results_for_"+new_mesh_name,new_system,1,0);
-
+*/
 	return 0;	
 }
